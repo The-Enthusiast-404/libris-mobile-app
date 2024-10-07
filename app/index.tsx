@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView, Text, View, Button } from 'react-native';
+import { StyleSheet, SafeAreaView, Text, View, TouchableOpacity, StatusBar } from 'react-native';
 import { BookList } from '../components/BookList';
 import { EpubReader } from '../components/EpubReader';
+import { ThemedView } from '../components/ThemedView';
+import { ThemedText } from '../components/ThemedText';
 
 interface Book {
   id: string;
@@ -28,16 +30,21 @@ export default function Index() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>LibriVox - Open Source E-Book Reader</Text>
-      {selectedBook ? (
-        <View style={styles.readerContainer}>
-          <Text>Reading: {selectedBook.name}</Text>
-          <EpubReader bookUri={selectedBook.uri} onClose={handleCloseReader} />
-          <Button title="Close Reader" onPress={handleCloseReader} />
-        </View>
-      ) : (
-        <BookList onBookSelect={handleBookSelect} />
-      )}
+      <StatusBar barStyle="dark-content" />
+      <ThemedView style={styles.content}>
+        <ThemedText style={styles.title}>LibriVox - Open Source E-Book Reader</ThemedText>
+        {selectedBook ? (
+          <View style={styles.readerContainer}>
+            <ThemedText style={styles.readingTitle}>Reading: {selectedBook.name}</ThemedText>
+            <EpubReader bookUri={selectedBook.uri} onClose={handleCloseReader} />
+            <TouchableOpacity style={styles.closeButton} onPress={handleCloseReader}>
+              <ThemedText style={styles.closeButtonText}>Close Reader</ThemedText>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <BookList onBookSelect={handleBookSelect} />
+        )}
+      </ThemedView>
     </SafeAreaView>
   );
 }
@@ -45,7 +52,9 @@ export default function Index() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#fff',
+  },
+  content: {
+    flex: 1,
     padding: 10,
   },
   title: {
@@ -56,5 +65,22 @@ const styles = StyleSheet.create({
   },
   readerContainer: {
     flex: 1,
+  },
+  readingTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 10,
+  },
+  closeButton: {
+    backgroundColor: '#f44336',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  closeButtonText: {
+    color: 'white',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });

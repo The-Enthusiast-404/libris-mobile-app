@@ -1,7 +1,10 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
+import React, { useState } from 'react';
+import { View, StyleSheet, FlatList, TouchableOpacity, Image, ActivityIndicator } from 'react-native';
 import * as DocumentPicker from 'expo-document-picker';
-import ePub from 'epubjs';
+import * as FileSystem from 'expo-file-system';
+import JSZip from 'jszip';
+import { ThemedText } from './ThemedText';
+import { ThemedView } from './ThemedView';
 
 interface Book {
   id: string;
@@ -13,43 +16,59 @@ interface Book {
   coverLoading: boolean;
 }
 
+const extractCover = async (book: Book): Promise<string | null> => {
+  if (book.uri.toLowerCase().endsWith('.epub')) {
+    try {
+      console.log(`Extracting cover for: ${book.name}`);
+
+      const content = await FileSystem.readAsStringAsync(book.uri, { encoding: FileSystem.EncodingType.Base64 });
+      const zip = new JSZip();
+      await zip.loadAsync(content, { base64: true });
+
+      // Find the first image file in the EPUB
+      const imageFile = Object.values(zip.files).find(file =>
+        !file.dir && file.name.match(/\.(jpe?g|png|gif|bmp)$/i)
+      );
+
+      if (imageFile) {
+        const imageData = await imageFile.async('base64');
+        const tempCoverPath = `${FileSystem.cacheDirectory}${book.id}-cover.jpg`;
+        await FileSystem.writeAsStringAsync(tempCoverPath, imageData, { encoding: FileSystem.EncodingType.Base64 });
+        console.log(`Cover extracted and saved to: ${tempCoverPath}`);
+        return tempCoverPath;
+      } else {
+        console.log('No image found in the EPUB file');
+        return null;
+      }
+    } catch (error) {
+      console.error(`Error extracting cover for ${book.name}:`, error);
+      return null;
+    }
+  } else {
+    console.log(`${book.name} is not an EPUB file, skipping cover extraction`);
+    return null;
+  }
+};
+
 export const BookList: React.FC<{ onBookSelect: (book: Book) => void }> = ({ onBookSelect }) => {
   const [books, setBooks] = useState<Book[]>([]);
   const [loading, setLoading] = useState(false);
 
-  const extractCover = async (book: Book) => {
-    if (book.uri.toLowerCase().endsWith('.epub')) {
-      try {
-        const epubBook = ePub(book.uri);
-        await epubBook.ready;
-        const cover = await epubBook.coverUrl();
-        setBooks(prevBooks =>
-          prevBooks.map(b =>
-            b.id === book.id ? { ...b, cover: cover || null, coverLoading: false } : b
-          )
-        );
-      } catch (error) {
-        console.error('Error extracting cover:', error);
-        setBooks(prevBooks =>
-          prevBooks.map(b =>
-            b.id === book.id ? { ...b, coverLoading: false } : b
-          )
-        );
-      }
-    } else {
-      setBooks(prevBooks =>
-        prevBooks.map(b =>
-          b.id === book.id ? { ...b, coverLoading: false } : b
-        )
-      );
-    }
+  const addBook = async (book: Book) => {
+    setBooks(prevBooks => [...prevBooks, { ...book, coverLoading: true }]);
+    const coverPath = await extractCover(book);
+    setBooks(prevBooks =>
+      prevBooks.map(b =>
+        b.id === book.id ? { ...b, cover: coverPath, coverLoading: false } : b
+      )
+    );
   };
 
   const pickDocument = async () => {
     try {
       setLoading(true);
       const result = await DocumentPicker.getDocumentAsync({
-        type: ['application/epub+zip', 'application/pdf'],
+        type: 'application/epub+zip',
         multiple: true
       });
 
@@ -61,11 +80,12 @@ export const BookList: React.FC<{ onBookSelect: (book: Book) => void }> = ({ onB
           size: asset.size,
           mimeType: asset.mimeType,
           cover: null,
-          coverLoading: true
+          coverLoading: false
         }));
 
-        setBooks(prevBooks => [...prevBooks, ...newBooks]);
-        newBooks.forEach(extractCover);
+        for (const book of newBooks) {
+          await addBook(book);
+        }
       }
     } catch (err) {
       console.error('Error picking document:', err);
@@ -85,31 +105,31 @@ export const BookList: React.FC<{ onBookSelect: (book: Book) => void }> = ({ onB
         <Image source={{ uri: item.cover }} style={styles.cover} />
       ) : (
         <View style={[styles.cover, styles.noCover]}>
-          <Text>{item.name.slice(0, 2).toUpperCase()}</Text>
+          <ThemedText>{item.name.slice(0, 2).toUpperCase()}</ThemedText>
         </View>
       )}
       <View style={styles.bookInfo}>
-        <Text style={styles.bookTitle}>{item.name}</Text>
-        <Text>Size: {(item.size / 1024 / 1024).toFixed(2)} MB</Text>
-        <Text>Type: {item.mimeType}</Text>
+        <ThemedText style={styles.bookTitle}>{item.name}</ThemedText>
+        <ThemedText>Size: {(item.size / 1024 / 1024).toFixed(2)} MB</ThemedText>
+        <ThemedText>Type: {item.mimeType}</ThemedText>
       </View>
     </TouchableOpacity>
   );
 
   return (
-    <View style={styles.container}>
+    <ThemedView style={styles.container}>
       <TouchableOpacity style={styles.button} onPress={pickDocument} disabled={loading}>
-        <Text style={styles.buttonText}>{loading ? 'Processing...' : 'Pick E-Book'}</Text>
+        <ThemedText style={styles.buttonText}>{loading ? 'Processing...' : 'Pick E-Book'}</ThemedText>
       </TouchableOpacity>
       <FlatList
         data={books}
         renderItem={renderBookItem}
         keyExtractor={(item) => item.id}
         ListHeaderComponent={() => (
-          <Text style={styles.title}>Your E-Books ({books.length}):</Text>
+          <ThemedText style={styles.title}>Your E-Books ({books.length}):</ThemedText>
         )}
       />
-    </View>
+    </ThemedView>
   );
 };
 
