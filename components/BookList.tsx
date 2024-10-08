@@ -25,19 +25,39 @@ const extractCover = async (book: Book): Promise<string | null> => {
       const zip = new JSZip();
       await zip.loadAsync(content, { base64: true });
 
-      // Find the first image file in the EPUB
-      const imageFile = Object.values(zip.files).find(file =>
-        !file.dir && file.name.match(/\.(jpe?g|png|gif|bmp)$/i)
-      );
+      const coverKeywords = ['cover', 'title', 'front'];
+      const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif'];
 
-      if (imageFile) {
-        const imageData = await imageFile.async('base64');
+      let coverFile: JSZip.JSZipObject | null = null;
+
+      // Search for cover image
+      for (const [path, file] of Object.entries(zip.files)) {
+        if (file.dir) continue;
+
+        const lowercasePath = path.toLowerCase();
+        if (imageExtensions.some(ext => lowercasePath.endsWith(ext))) {
+          if (coverKeywords.some(keyword => lowercasePath.includes(keyword))) {
+            coverFile = file;
+            break;
+          }
+        }
+      }
+
+      // If no cover found, use the first image in the EPUB
+      if (!coverFile) {
+        coverFile = Object.values(zip.files).find(file =>
+          !file.dir && imageExtensions.some(ext => file.name.toLowerCase().endsWith(ext))
+        ) || null;
+      }
+
+      if (coverFile) {
+        const imageData = await coverFile.async('base64');
         const tempCoverPath = `${FileSystem.cacheDirectory}${book.id}-cover.jpg`;
         await FileSystem.writeAsStringAsync(tempCoverPath, imageData, { encoding: FileSystem.EncodingType.Base64 });
         console.log(`Cover extracted and saved to: ${tempCoverPath}`);
         return tempCoverPath;
       } else {
-        console.log('No image found in the EPUB file');
+        console.log('No suitable cover image found in the EPUB file');
         return null;
       }
     } catch (error) {
