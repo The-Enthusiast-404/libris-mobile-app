@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator } from 'react-native';
+import React, { useState, useEffect, useRef } from 'react';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as FileSystem from 'expo-file-system';
 import * as ZipArchive from 'react-native-zip-archive';
+import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
 
@@ -17,6 +18,9 @@ export const EpubReader: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   const [error, setError] = useState<string | null>(null);
   const [currentFileIndex, setCurrentFileIndex] = useState(0);
   const [htmlFiles, setHtmlFiles] = useState<string[]>([]);
+  const [fontSize, setFontSize] = useState(16);
+  const [isDarkMode, setIsDarkMode] = useState(false);
+  const webViewRef = useRef<WebView>(null);
 
   useEffect(() => {
     extractAndLoadEpub();
@@ -70,16 +74,44 @@ export const EpubReader: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   const loadHtmlFile = async (filePath: string) => {
     try {
       const content = await FileSystem.readAsStringAsync(filePath);
-      // Preprocess the HTML content to handle relative paths
-      const processedContent = content.replace(
-        /(src|href)=['"]((?!http|https|data:).+?)['"]/g,
-        (match, attr, value) => `${attr}="file://${FileSystem.cacheDirectory}epub_${Date.now()}/${value}"`
-      );
+      const processedContent = processHtmlContent(content);
       setContent(processedContent);
     } catch (err) {
       console.error('Error loading HTML file:', err);
       setError(`Failed to load page: ${err.message}`);
     }
+  };
+
+  const processHtmlContent = (html: string) => {
+    const baseStyle = `
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        font-size: ${fontSize}px;
+        line-height: 1.5;
+        padding: 20px;
+        color: ${isDarkMode ? '#ffffff' : '#000000'};
+        background-color: ${isDarkMode ? '#1a1a1a' : '#ffffff'};
+      }
+      img {
+        max-width: 100%;
+        height: auto;
+      }
+    `;
+
+    const styledHtml = `
+      <html>
+        <head>
+          <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+          <style>${baseStyle}</style>
+        </head>
+        <body>${html}</body>
+      </html>
+    `;
+
+    return styledHtml.replace(
+      /(src|href)=['"]((?!http|https|data:).+?)['"]/g,
+      (match, attr, value) => `${attr}="file://${FileSystem.cacheDirectory}epub_${Date.now()}/${value}"`
+    );
   };
 
   const navigatePage = (direction: 'next' | 'prev') => {
@@ -88,6 +120,29 @@ export const EpubReader: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
       setCurrentFileIndex(newIndex);
       loadHtmlFile(htmlFiles[newIndex]);
     }
+  };
+
+  const changeFontSize = (delta: number) => {
+    setFontSize(prevSize => {
+      const newSize = prevSize + delta;
+      webViewRef.current?.injectJavaScript(`
+        document.body.style.fontSize = '${newSize}px';
+        true;
+      `);
+      return newSize;
+    });
+  };
+
+  const toggleTheme = () => {
+    setIsDarkMode(prev => {
+      const newMode = !prev;
+      webViewRef.current?.injectJavaScript(`
+        document.body.style.color = '${newMode ? '#ffffff' : '#000000'}';
+        document.body.style.backgroundColor = '${newMode ? '#1a1a1a' : '#ffffff'}';
+        true;
+      `);
+      return newMode;
+    });
   };
 
   if (loading) {
@@ -113,17 +168,26 @@ export const EpubReader: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   return (
     <ThemedView style={styles.container}>
       <WebView
+        ref={webViewRef}
         source={{ html: content, baseUrl: '' }}
         style={styles.webView}
         originWhitelist={['*']}
       />
-      <View style={styles.navigation}>
+      <View style={styles.controls}>
         <TouchableOpacity onPress={() => navigatePage('prev')} style={styles.navButton}>
-          <ThemedText style={styles.navButtonText}>Previous</ThemedText>
+          <Ionicons name="chevron-back" size={24} color="white" />
         </TouchableOpacity>
-        <ThemedText>{`${currentFileIndex + 1} / ${htmlFiles.length}`}</ThemedText>
+        <TouchableOpacity onPress={() => changeFontSize(-1)} style={styles.controlButton}>
+          <Ionicons name="remove" size={24} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => changeFontSize(1)} style={styles.controlButton}>
+          <Ionicons name="add" size={24} color="white" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={toggleTheme} style={styles.controlButton}>
+          <Ionicons name={isDarkMode ? "sunny" : "moon"} size={24} color="white" />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => navigatePage('next')} style={styles.navButton}>
-          <ThemedText style={styles.navButtonText}>Next</ThemedText>
+          <Ionicons name="chevron-forward" size={24} color="white" />
         </TouchableOpacity>
       </View>
       <TouchableOpacity onPress={onClose} style={styles.closeButton}>
@@ -140,20 +204,18 @@ const styles = StyleSheet.create({
   webView: {
     flex: 1,
   },
-  navigation: {
+  controls: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'space-around',
     alignItems: 'center',
     padding: 10,
-    backgroundColor: '#f0f0f0',
+    backgroundColor: '#007AFF',
   },
   navButton: {
     padding: 10,
-    backgroundColor: '#007AFF',
-    borderRadius: 5,
   },
-  navButtonText: {
-    color: 'white',
+  controlButton: {
+    padding: 10,
   },
   closeButton: {
     padding: 10,
