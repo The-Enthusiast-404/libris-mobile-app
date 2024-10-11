@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { StyleSheet, SafeAreaView, Text, View, TouchableOpacity, StatusBar } from 'react-native';
+import { StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BookList } from '../components/BookList';
 import { EpubReader } from '../components/EpubReader';
 import { ThemedView } from '../components/ThemedView';
@@ -29,23 +30,22 @@ export default function Index() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <ThemedView style={styles.content}>
-        <ThemedText style={styles.title}>LibriVox - Open Source E-Book Reader</ThemedText>
-        {selectedBook ? (
-          <View style={styles.readerContainer}>
-            <ThemedText style={styles.readingTitle}>Reading: {selectedBook.name}</ThemedText>
-            <EpubReader bookUri={selectedBook.uri} onClose={handleCloseReader} />
-            <TouchableOpacity style={styles.closeButton} onPress={handleCloseReader}>
-              <ThemedText style={styles.closeButtonText}>Close Reader</ThemedText>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <BookList onBookSelect={handleBookSelect} />
-        )}
-      </ThemedView>
-    </SafeAreaView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <ThemedView style={styles.content}>
+          <ThemedText style={styles.title}>LibriVox - Open Source E-Book Reader</ThemedText>
+          {selectedBook ? (
+            <EpubReader
+              bookUri={selectedBook.uri}
+              onClose={handleCloseReader}
+            />
+          ) : (
+            <BookList onBookSelect={handleBookSelect} />
+          )}
+        </ThemedView>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -55,32 +55,11 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    padding: 10,
   },
   title: {
     fontSize: 24,
     fontWeight: 'bold',
     textAlign: 'center',
     marginVertical: 20,
-  },
-  readerContainer: {
-    flex: 1,
-  },
-  readingTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 10,
-  },
-  closeButton: {
-    backgroundColor: '#f44336',
-    padding: 10,
-    borderRadius: 5,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  closeButtonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });
