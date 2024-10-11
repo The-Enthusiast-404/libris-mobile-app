@@ -1,10 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
 import { Reader, ReaderProvider, useReader } from '@epubjs-react-native/core';
 import { useFileSystem } from '@epubjs-react-native/file-system';
 import { Ionicons } from '@expo/vector-icons';
 import { ThemedText } from './ThemedText';
 import { ThemedView } from './ThemedView';
+import { BookmarksList } from './BookmarksList';
+import { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 interface EpubReaderProps {
   bookUri: string;
@@ -27,7 +30,8 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
     getMeta,
     addBookmark,
     removeBookmark,
-    isBookmarked
+    isBookmarked,
+    bookmarks
   } = useReader();
 
   const [fontSize, setFontSize] = useState(100);
@@ -37,6 +41,8 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isNightMode, setIsNightMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const bottomSheetRef = useRef<BottomSheetModal>(null);
 
   useEffect(() => {
     const fetchMeta = async () => {
@@ -78,9 +84,16 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
     const location = await getCurrentLocation();
     if (location) {
       if (isBookmarked) {
-        removeBookmark({ cfi: location.start.cfi });
+        const bookmark = bookmarks.find(
+          (item) =>
+            item.location.start.cfi === location.start.cfi &&
+            item.location.end.cfi === location.end.cfi
+        );
+        if (bookmark) {
+          removeBookmark(bookmark);
+        }
       } else {
-        addBookmark({ cfi: location.start.cfi, text: 'Bookmarked' });
+        addBookmark(location);
       }
     }
   };
@@ -93,52 +106,62 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   );
 
   return (
-    <ThemedView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={onClose}>
-          <Ionicons name="close" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <ThemedText style={styles.title}>{bookMeta?.title || 'Loading...'}</ThemedText>
-        <TouchableOpacity onPress={toggleNightMode}>
-          <Ionicons name={isNightMode ? "sunny" : "moon"} size={24} color="#007AFF" />
-        </TouchableOpacity>
-      </View>
+    <GestureHandlerRootView style={styles.container}>
+      <ThemedView style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={onClose}>
+            <Ionicons name="close" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <ThemedText style={styles.title}>{bookMeta?.title || 'Loading...'}</ThemedText>
+          <TouchableOpacity onPress={toggleNightMode}>
+            <Ionicons name={isNightMode ? "sunny" : "moon"} size={24} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
 
-      {isLoading ? (
-        renderOpeningBookComponent()
-      ) : (
-        <Reader
-          src={bookUri}
-          width={Dimensions.get('window').width}
-          height={Dimensions.get('window').height - 150}
-          fileSystem={useFileSystem}
-          onLocationChange={handleLocationChange}
-          renderOpeningBookComponent={renderOpeningBookComponent}
+        {isLoading ? (
+          renderOpeningBookComponent()
+        ) : (
+          <Reader
+            src={bookUri}
+            width={Dimensions.get('window').width}
+            height={Dimensions.get('window').height - 150}
+            fileSystem={useFileSystem}
+            onLocationChange={handleLocationChange}
+            renderOpeningBookComponent={renderOpeningBookComponent}
+          />
+        )}
+
+        <View style={styles.controls}>
+          <TouchableOpacity onPress={goPrevious} disabled={atStart}>
+            <Ionicons name="chevron-back" size={24} color={atStart ? "#ccc" : "#007AFF"} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => changeFontSizeHandler(-10)}>
+            <Ionicons name="remove" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={toggleBookmark}>
+            <Ionicons name={isBookmarked ? "bookmark" : "bookmark-outline"} size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => bottomSheetRef.current?.present()}>
+            <Ionicons name="list" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => changeFontSizeHandler(10)}>
+            <Ionicons name="add" size={24} color="#007AFF" />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={goNext} disabled={atEnd}>
+            <Ionicons name="chevron-forward" size={24} color={atEnd ? "#ccc" : "#007AFF"} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
+          <ThemedText style={styles.pageNumber}>{`${currentPage} / ${totalPages}`}</ThemedText>
+        </View>
+
+        <BookmarksList
+          ref={bottomSheetRef}
+          onClose={() => bottomSheetRef.current?.dismiss()}
         />
-      )}
-
-      <View style={styles.controls}>
-        <TouchableOpacity onPress={goPrevious} disabled={atStart}>
-          <Ionicons name="chevron-back" size={24} color={atStart ? "#ccc" : "#007AFF"} />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => changeFontSizeHandler(-10)}>
-          <Ionicons name="remove" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={toggleBookmark}>
-          <Ionicons name={isBookmarked ? "bookmark" : "bookmark-outline"} size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => changeFontSizeHandler(10)}>
-          <Ionicons name="add" size={24} color="#007AFF" />
-        </TouchableOpacity>
-        <TouchableOpacity onPress={goNext} disabled={atEnd}>
-          <Ionicons name="chevron-forward" size={24} color={atEnd ? "#ccc" : "#007AFF"} />
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.footer}>
-        <ThemedText style={styles.pageNumber}>{`${currentPage} / ${totalPages}`}</ThemedText>
-      </View>
-    </ThemedView>
+      </ThemedView>
+    </GestureHandlerRootView>
   );
 };
 

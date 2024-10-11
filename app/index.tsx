@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { StyleSheet, SafeAreaView, StatusBar } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { BookList } from '../components/BookList';
 import { EpubReader } from '../components/EpubReader';
 import { ThemedView } from '../components/ThemedView';
 import { ThemedText } from '../components/ThemedText';
+
+interface Book {
+  id: string;
+  name: string;
+  uri: string;
+  size: number;
+  mimeType: string | undefined;
+  cover: string | null;
+  coverLoading: boolean;
+}
 
 export default function Index() {
   const [selectedBook, setSelectedBook] = useState<Book | null>(null);
@@ -19,20 +30,22 @@ export default function Index() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
-      <ThemedView style={styles.content}>
-        <ThemedText style={styles.title}>LibriVox - Open Source E-Book Reader</ThemedText>
-        {selectedBook ? (
-          <EpubReader
-            bookUri={selectedBook.uri}
-            onClose={handleCloseReader}
-          />
-        ) : (
-          <BookList onBookSelect={handleBookSelect} />
-        )}
-      </ThemedView>
-    </SafeAreaView>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <ThemedView style={styles.content}>
+          <ThemedText style={styles.title}>LibriVox - Open Source E-Book Reader</ThemedText>
+          {selectedBook ? (
+            <EpubReader
+              bookUri={selectedBook.uri}
+              onClose={handleCloseReader}
+            />
+          ) : (
+            <BookList onBookSelect={handleBookSelect} />
+          )}
+        </ThemedView>
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
