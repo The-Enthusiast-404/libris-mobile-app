@@ -34,7 +34,6 @@ export default function Index() {
       <SafeAreaView style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <ThemedView style={styles.content}>
-          <ThemedText style={styles.title}>LibriVox - Open Source E-Book Reader</ThemedText>
           {selectedBook ? (
             <EpubReader
               bookUri={selectedBook.uri}
