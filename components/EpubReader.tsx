@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ActivityIndicator, Dimensions, TextInput, FlatList } from 'react-native';
 import { Reader, ReaderProvider, useReader } from '@epubjs-react-native/core';
 import { useFileSystem } from '@epubjs-react-native/file-system';
 import { Ionicons } from '@expo/vector-icons';
@@ -12,6 +12,11 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 interface EpubReaderProps {
   bookUri: string;
   onClose: () => void;
+}
+
+interface TOCItem {
+  label: string;
+  href: string;
 }
 
 const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
@@ -31,7 +36,8 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
     addBookmark,
     removeBookmark,
     isBookmarked,
-    bookmarks
+    bookmarks,
+    toc
   } = useReader();
 
   const [fontSize, setFontSize] = useState(100);
@@ -41,8 +47,12 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [isNightMode, setIsNightMode] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [showTOC, setShowTOC] = useState(false);
+  const [tocSearch, setTocSearch] = useState('');
+  const [filteredTOC, setFilteredTOC] = useState<TOCItem[]>([]);
 
   const bottomSheetRef = useRef<BottomSheetModal>(null);
+  const tocRef = useRef<FlatList>(null);
 
   useEffect(() => {
     const fetchMeta = async () => {
@@ -52,6 +62,14 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
     };
     fetchMeta();
   }, []);
+
+  useEffect(() => {
+    setFilteredTOC(
+      toc.filter((item) =>
+        item.label.toLowerCase().includes(tocSearch.toLowerCase())
+      )
+    );
+  }, [toc, tocSearch]);
 
   const handleLocationChange = useCallback(async () => {
     const location = await getCurrentLocation();
@@ -83,7 +101,7 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
   const toggleBookmark = async () => {
     const location = await getCurrentLocation();
     if (location) {
-      if (isBookmarked) {
+      if (await isBookmarked({ cfi: location.start.cfi })) {
         const bookmark = bookmarks.find(
           (item) =>
             item.location.start.cfi === location.start.cfi &&
@@ -97,6 +115,24 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
       }
     }
   };
+
+  const toggleTOC = () => {
+    setShowTOC(!showTOC);
+  };
+
+  const handleTOCItemPress = (href: string) => {
+    goToLocation(href);
+    setShowTOC(false);
+  };
+
+  const renderTOCItem = ({ item }: { item: TOCItem }) => (
+    <TouchableOpacity
+      style={styles.tocItem}
+      onPress={() => handleTOCItemPress(item.href)}
+    >
+      <ThemedText>{item.label}</ThemedText>
+    </TouchableOpacity>
+  );
 
   const renderOpeningBookComponent = () => (
     <View style={styles.loadingContainer}>
@@ -112,24 +148,43 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
           <TouchableOpacity onPress={onClose}>
             <Ionicons name="close" size={24} color="#007AFF" />
           </TouchableOpacity>
-          <ThemedText style={styles.title}>{bookMeta?.title || 'Loading...'}</ThemedText>
-          <TouchableOpacity onPress={toggleNightMode}>
-            <Ionicons name={isNightMode ? "sunny" : "moon"} size={24} color="#007AFF" />
+          <TouchableOpacity onPress={toggleTOC}>
+            <Ionicons name="list" size={24} color="#007AFF" />
           </TouchableOpacity>
         </View>
 
-        {isLoading ? (
-          renderOpeningBookComponent()
-        ) : (
-          <Reader
-            src={bookUri}
-            width={Dimensions.get('window').width}
-            height={Dimensions.get('window').height - 150}
-            fileSystem={useFileSystem}
-            onLocationChange={handleLocationChange}
-            renderOpeningBookComponent={renderOpeningBookComponent}
-          />
-        )}
+        <View style={styles.readerContainer}>
+          {isLoading ? (
+            renderOpeningBookComponent()
+          ) : (
+            <Reader
+              src={bookUri}
+              width={Dimensions.get('window').width}
+              height={Dimensions.get('window').height - 150}
+              fileSystem={useFileSystem}
+              onLocationChange={handleLocationChange}
+              renderOpeningBookComponent={renderOpeningBookComponent}
+            />
+          )}
+
+          {showTOC && (
+            <View style={styles.tocContainer}>
+              <TextInput
+                style={styles.tocSearch}
+                placeholder="Search TOC"
+                value={tocSearch}
+                onChangeText={setTocSearch}
+              />
+              <FlatList
+                ref={tocRef}
+                data={filteredTOC}
+                renderItem={renderTOCItem}
+                keyExtractor={(item) => item.href}
+                style={styles.tocList}
+              />
+            </View>
+          )}
+        </View>
 
         <View style={styles.controls}>
           <TouchableOpacity onPress={goPrevious} disabled={atStart}>
@@ -142,7 +197,7 @@ const ReaderContent: React.FC<EpubReaderProps> = ({ bookUri, onClose }) => {
             <Ionicons name={isBookmarked ? "bookmark" : "bookmark-outline"} size={24} color="#007AFF" />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => bottomSheetRef.current?.present()}>
-            <Ionicons name="list" size={24} color="#007AFF" />
+            <Ionicons name="bookmarks" size={24} color="#007AFF" />
           </TouchableOpacity>
           <TouchableOpacity onPress={() => changeFontSizeHandler(10)}>
             <Ionicons name="add" size={24} color="#007AFF" />
@@ -190,6 +245,10 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
   },
+  readerContainer: {
+    flex: 1,
+    position: 'relative',
+  },
   controls: {
     flexDirection: 'row',
     justifyContent: 'space-around',
@@ -216,5 +275,28 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 10,
     fontSize: 16,
+  },
+  tocContainer: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: 250,
+    height: '100%',
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    borderLeftWidth: 1,
+    borderLeftColor: '#e0e0e0',
+  },
+  tocSearch: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  tocList: {
+    flex: 1,
+  },
+  tocItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
 });
